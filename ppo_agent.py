@@ -1,3 +1,41 @@
+import torch
+import torch.nn as nn
+import numpy as np
+
+# --- EL PILOTO (Red Neuronal) ---
+class CarPilot(nn.Module):
+    def __init__(self, num_sensors, num_actions):
+        super(CarPilot, self).__init__()
+        # Capas compartidas
+        self.shared_layers = nn.Sequential(
+            nn.Linear(num_sensors, 64),
+            nn.Tanh(),
+            nn.Linear(64, 64),
+            nn.Tanh()
+        )
+        # Actor (Media de la acción)
+        self.actor_mean = nn.Linear(64, num_actions)
+        # Desviación estándar aprendible
+        self.actor_log_std = nn.Parameter(torch.zeros(1, num_actions))
+        # Crítico (Valor del estado)
+        self.critic = nn.Linear(64, 1)
+
+    def get_action(self, state, action=None):
+        z = self.shared_layers(state)
+        mean = self.actor_mean(z)
+        std = torch.exp(self.actor_log_std)
+        dist = torch.distributions.Normal(mean, std)
+        
+        if action is None:
+            action = dist.sample()
+        
+        # Sumamos log_prob en la última dimensión para manejar acciones multidimensionales
+        log_prob = dist.log_prob(action).sum(axis=-1)
+        entropy = dist.entropy().sum(axis=-1)
+        value = self.critic(z)
+        
+        return action, log_prob, entropy, value
+
 # --- EL ENTRENADOR PPO (Algoritmo de Aprendizaje) ---
 class PPO_Agent:
     def __init__(self, num_sensors, num_actions, lr, gamma, K_epochs, eps_clip):
